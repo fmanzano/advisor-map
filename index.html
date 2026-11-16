@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Advisor Map</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: a faint outline locator on top, then areas from west to east.
+   Each area is a name in the margin with its location tiles beside it. */
+:root {
+  --bg: #EDF0EE; --fg: #1E2928; --muted: #5A6866; --line: #C9D1CE;
+  --land: #E3E8E5; --accent: #2C5C6A; --check: #8A5A00;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141918; --fg: #E2E7E5; --muted: #98A5A2; --line: #2E3836;
+    --land: #1B2221; --accent: #8FC3D0; --check: #D8A545; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141918; --fg: #E2E7E5; --muted: #98A5A2; --line: #2E3836;
+  --land: #1B2221; --accent: #8FC3D0; --check: #D8A545; color-scheme: dark;
+}
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 400 15px/1.5 var(--sans); }
+.page {
+  max-width: 72rem; margin: 0 auto; padding-block: 2rem 3rem;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; gap: 1.75rem;
+}
+h1, h2, h3, h4, p, ul, dl, dd { margin: 0; }
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+header { display: flex; flex-direction: column; gap: .5rem; }
+h1 { font: 600 1.6rem/1.2 var(--sans); letter-spacing: -.01em; }
+.counts { font: 400 .8rem var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.lede { max-width: 62ch; }
+.quiet { color: var(--muted); font-size: .85rem; }
+
+.locator { overflow-x: auto; border-top: 1px solid var(--line); padding-top: 1rem; }
+.locator svg { display: block; width: 100%; min-width: 560px; height: auto; }
+.locator .land { fill: var(--land); stroke: var(--line); stroke-width: 1; stroke-linejoin: round; }
+.locator .border { fill: none; stroke: var(--line); stroke-width: 1; stroke-dasharray: 3 3; }
+.locator .lead { fill: none; stroke: var(--muted); stroke-width: .8; }
+.locator text { font: 500 11px var(--sans); fill: var(--fg); }
+.locator a:hover text { fill: var(--accent); }
+
+#areas { display: flex; flex-direction: column; gap: 1.75rem; }
+.area {
+  display: grid; grid-template-columns: 11rem minmax(0, 1fr); gap: 1rem 2rem;
+  padding-top: 1.5rem; border-top: 1px solid var(--line);
+}
+.area h2 { font: 600 1rem/1.3 var(--sans); }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr)); gap: 1.75rem 2rem; }
+.tile { display: flex; flex-direction: column; gap: .9rem; min-width: 0; }
+.tile h3 { font: 500 .72rem var(--mono); letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+.prog { display: flex; flex-direction: column; gap: .15rem; min-width: 0; }
+.prog h4 { font: 600 .98rem/1.3 var(--sans); }
+.tag { font: 500 .68rem var(--mono); letter-spacing: .05em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line); padding: 0 .35rem; margin-left: .35rem; white-space: nowrap; }
+summary { cursor: pointer; }
+summary:hover { color: var(--accent); }
+.stay .yrs, .marks { font-family: var(--mono); font-size: .86rem; font-variant-numeric: tabular-nums; }
+.marks { display: flex; flex-wrap: wrap; gap: 0 1.25rem; }
+.check { color: var(--check); }
+.aside { opacity: .45; }
+.detail { display: flex; flex-direction: column; gap: .7rem; padding: .5rem 0 .7rem .95rem; overflow-wrap: anywhere; }
+.detail ul { list-style: none; padding: 0; display: flex; flex-direction: column; gap: .25rem; }
+.detail li.off, .detail li.off a { color: var(--muted); }
+.detail h5 { margin: 0; font: 500 .72rem var(--mono); letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+.detail dl { display: grid; grid-template-columns: minmax(6.5rem, auto) minmax(0, 1fr); gap: .2rem .9rem; font-size: .88rem; }
+.detail dt { color: var(--muted); }
+.detail section { display: flex; flex-direction: column; gap: .3rem; }
+.react { display: flex; flex-direction: column; gap: .2rem; font-size: .9rem; }
+.react .q { color: var(--muted); font-size: .8rem; }
+
+.toenter { border-top: 1px solid var(--line); padding-top: 1.5rem; display: flex; flex-direction: column; gap: .6rem; }
+.toenter h2 { font: 600 1rem var(--sans); }
+.toenter ul { padding-left: 1.1rem; display: flex; flex-direction: column; gap: .3rem; max-width: 70ch; }
+
+@media (max-width: 44rem) { .area { grid-template-columns: minmax(0, 1fr); } }
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <h1>Advisor Map</h1>
+    <p class="counts" id="counts"></p>
+    <p class="lede">Each place here is somewhere to live for the length of a PhD. Schools rarely hire their own graduates as faculty, so each program shows the years a stay would run.</p>
+    <p class="quiet" id="pending-note" hidden></p>
+  </header>
+  <div class="locator" id="locator"></div>
+  <main id="areas"><p class="quiet">Loading the list…</p></main>
+  <section class="toenter" id="to-enter" hidden>
+    <h2>Still to enter or check</h2>
+    <ul id="to-enter-list"></ul>
+  </section>
+  <p class="quiet" id="source-note"></p>
+</div>
+
+<script>
+/* ---------- Where the data comes from ----------
+   Put the Google Sheet's id between the quotes to read it live. The id is the long
+   code in the Sheet's address, between /d/ and /edit. The Sheet must be shared as
+   "Anyone with the link can view". While it is blank, the page reads the CSV files
+   in the data folder next to this file. */
+const CONFIG = { sheetId: "" };
+const TABS = ["Advisors", "Programs", "Schools", "Locations", "Country", "Reactions"];
+const DEFAULT_START = 2028, DEFAULT_YEARS = 6, STALE_DAYS = 365, US = "United States";
+
+function parseCSV(text) {
+  const rows = []; let row = [], cell = "", quoted = false;
+  text = text.replace(/^﻿/, "");
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (quoted) {
+      if (c === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else quoted = false; }
+      else cell += c;
+    } else if (c === '"') quoted = true;
+    else if (c === ",") { row.push(cell); cell = ""; }
+    else if (c === "\n" || c === "\r") {
+      if (c === "\r" && text[i + 1] === "\n") i++;
+      row.push(cell); rows.push(row); row = []; cell = "";
+    } else cell += c;
+  }
+  if (cell !== "" || row.length) { row.push(cell); rows.push(row); }
+  const head = (rows.shift() || []).map(h => h.trim());
+  return rows.filter(r => r.some(v => v.trim() !== ""))
+    .map(r => Object.fromEntries(head.map((h, i) => [h, (r[i] || "").trim()])));
+}
+
+async function fetchTab(url) {
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  const text = await res.text();
+  if (/^\s*<(!doctype|html)/i.test(text)) throw new Error("not a CSV");
+  return parseCSV(text);
+}
+
+async function loadData() {
+  const collect = async (urlFor) => {
+    const parts = await Promise.all(TABS.map(t => fetchTab(urlFor(t))));
+    return Object.fromEntries(TABS.map((t, i) => [t, parts[i]]));
+  };
+  if (window.EMBEDDED) {
+    return { data: Object.fromEntries(TABS.map(t => [t, parseCSV(window.EMBEDDED[t] || "")])), source: "a copy of the data built into this page" };
+  }
+  if (CONFIG.sheetId) {
+    try {
+      const data = await collect(t => "https://docs.google.com/spreadsheets/d/" + CONFIG.sheetId +
+        "/gviz/tq?tqx=out:csv&headers=1&sheet=" + encodeURIComponent(t));
+      if (data.Advisors.length && data.Programs.length) return { data, source: "the Google Sheet" };
+    } catch (e) { /* fall through to the files */ }
+    return { data: await collect(t => "data/" + t.toLowerCase() + ".csv"), source: "the saved data files, because the Google Sheet could not be read" };
+  }
+  return { data: await collect(t => "data/" + t.toLowerCase() + ".csv"), source: "the saved data files" };
+}
+
+/* ---------- Helpers ---------- */
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const blank = v => v === undefined || v === null || String(v).trim() === "";
+const index = (arr, k) => Object.fromEntries(arr.map(r => [r[k], r]));
+const plural = (n, w) => n + " " + w + (n === 1 ? "" : "s");
+const slug = s => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+const stale = d => blank(d) || (Date.now() - new Date(d).getTime()) / 864e5 > STALE_DAYS;
+const link = (href, text) => '<a href="' + esc(href) + '" target="_blank" rel="noopener">' + esc(text) + "</a>";
+const links = cell => String(cell).split(/\s*;\s*/).filter(u => /^https?:\/\//.test(u));
+const LEVELS = { full: "fully funded", partial: "partly funded", none: "unfunded" };
+
+function render(D) {
+  const ADVISORS = D.Advisors, PROGRAMS = D.Programs, SCHOOLS = D.Schools, LOCATIONS = D.Locations,
+    COUNTRY = D.Country, REACTIONS = D.Reactions;
+  const LOC = index(LOCATIONS, "location_id"), SCH = index(SCHOOLS, "school_id"), CTRY = index(COUNTRY, "country");
+
+  const progs = PROGRAMS.filter(p => SCH[p.school_id] && LOC[SCH[p.school_id].location_id]).map(p => {
+    const school = SCH[p.school_id], loc = LOC[school.location_id];
+    const advisors = ADVISORS.filter(a => a.program_id === p.program_id);
+    const open = advisors.filter(a => a.status !== "not taking").length;
+    const start = blank(p.start_year) ? DEFAULT_START : Number(p.start_year);
+    const years = blank(p.expected_years) ? DEFAULT_YEARS : Number(p.expected_years);
+    return {
+      p, school, loc, advisors, open, start, end: start + years,
+      hasFunding: !blank(p.funding_months) || !blank(p.funding_level),
+      hasHealth: !blank(school.spouse_coverage)
+    };
+  });
+  const anyFigures = progs.some(v => v.hasFunding || v.hasHealth);
+  const anyVerified = progs.some(v => !blank(v.p.funding_verified) || !blank(v.school.health_verified));
+  const anyStatus = ADVISORS.some(a => !blank(a.status) && a.status !== "unconfirmed");
+
+  /* ----- Inside a program ----- */
+  const PROGRAM_FIELDS = [["stipend", "Stipend"], ["guaranteed_years", "Guaranteed years"], ["funding_source", "Funded by"],
+    ["teaching_required", "Teaching required"], ["teaching_detail", "Teaching"], ["summer_funding", "Summer"],
+    ["tuition_waiver", "Tuition"], ["fees_not_waived", "Fees you pay"], ["funding_applies_to", "Applies to"],
+    ["funding_risk", "Could change"], ["funding_found", "Found on"], ["funding_verified", "Verified on"]];
+  const SCHOOL_FIELDS = [["student_coverage", "For you"], ["spouse_coverage", "For your spouse"],
+    ["spouse_annual_cost", "Spouse cost a year"], ["dental_vision", "Dental and vision"], ["health_applies_to", "Applies to"],
+    ["health_risk", "Could change"], ["health_found", "Found on"], ["health_verified", "Verified on"]];
+  const COUNTRY_FIELDS = [["hiring_norm", "Hiring norm"], ["spouse_work_rights", "Spouse work rights"],
+    ["health_baseline", "Public health cover"], ["study_permit", "Study permit"], ["verified", "Verified on"]];
+
+  function block(title, row, fields, sourceKey) {
+    const items = fields.filter(f => !blank(row[f[0]])).map(f => "<dt>" + f[1] + "</dt><dd>" + esc(row[f[0]]) + "</dd>");
+    const src = blank(row[sourceKey]) ? [] : links(row[sourceKey]);
+    if (src.length) items.push("<dt>" + (src.length > 1 ? "Sources" : "Source") + "</dt><dd>" +
+      src.map((u, i) => link(u, src.length > 1 ? "page " + (i + 1) : "open page")).join(", ") + "</dd>");
+    return items.length ? "<section><h5>" + title + "</h5><dl>" + items.join("") + "</dl></section>" : "";
+  }
+
+  function detail(v) {
+    const people = v.advisors.map(a => {
+      const name = blank(a.link) ? esc(a.advisor) + ' <span class="quiet">link to add</span>' : link(a.link, a.advisor);
+      let note = "";
+      if (a.status === "not taking") note = "not taking students" + (blank(a.status_cycle) ? "" : ", " + esc(a.status_cycle));
+      else if (a.status === "taking") note = "taking students" + (blank(a.status_cycle) ? "" : ", " + esc(a.status_cycle));
+      else if (anyStatus) note = "unconfirmed";
+      if (!blank(a.moved_from)) note += (note ? " · " : "") + "moved from " + esc(a.moved_from) + (blank(a.moved_date) ? "" : ", " + esc(a.moved_date));
+      return '<li class="' + (a.status === "not taking" ? "off" : "") + '">' + name + (note ? ' <span class="quiet">' + note + "</span>" : "") + "</li>";
+    }).join("");
+    const place = [];
+    if (!blank(v.loc.job_market)) place.push("<dt>Work for your spouse</dt><dd>" + esc(v.loc.job_market) + "</dd>");
+    if (!blank(v.loc.nearby_institutions)) place.push("<dt>Other institutions nearby</dt><dd>" +
+      esc(String(v.loc.nearby_institutions).split(";").map(s => s.trim()).join(", ")) + "</dd>");
+    const c = CTRY[v.loc.country];
+    return '<div class="detail"><ul>' + people + "</ul>" +
+      block("Funding", v.p, PROGRAM_FIELDS, "funding_source_link") +
+      block("Healthcare", v.school, SCHOOL_FIELDS, "health_source_link") +
+      (place.length ? "<section><h5>The place</h5><dl>" + place.join("") + "</dl></section>" : "") +
+      (c && v.loc.country !== US ? block(esc(v.loc.country), c, COUNTRY_FIELDS, "source_link") : "") + "</div>";
+  }
+
+  /* ----- Program label ----- */
+  function label(v) {
+    const n = v.advisors.length;
+    const count = v.open === n ? plural(n, "advisor") : v.open + " of " + n + " advisors";
+    const name = blank(v.p.program) ? '<span class="quiet">program to confirm</span>' : esc(v.p.program);
+    const abroad = v.loc.country !== US ? '<span class="tag">' + esc(v.loc.country) + "</span>" : "";
+    let marks = "";
+    if (anyFigures) {
+      const f = v.hasFunding
+        ? esc([blank(v.p.funding_months) ? "" : v.p.funding_months + " mo", LEVELS[v.p.funding_level] || v.p.funding_level || ""].filter(Boolean).join(" · ")) +
+            (anyVerified && stale(v.p.funding_verified) ? ' <span class="check">check date</span>' : "")
+        : '<span class="check">funding not found</span>';
+      const cov = v.school.spouse_coverage;
+      const h = v.hasHealth
+        ? "spouse: " + (cov === "to confirm" || cov === "not offered" ? '<span class="check">' + esc(cov) + "</span>" : esc(cov)) +
+            (anyVerified && stale(v.school.health_verified) ? ' <span class="check">check date</span>' : "")
+        : '<span class="check">healthcare not found</span>';
+      marks = '<p class="marks"><span>' + f + "</span><span>" + h + "</span></p>";
+    }
+    const paused = n > 0 && v.open === 0 ? '<p class="quiet">No advisor here is taking students this cycle.</p>' : "";
+    return '<article class="prog' + (v.p.status === "set aside" ? " aside" : "") + '">' +
+      "<h4>" + esc(v.school.school) + abroad + "</h4>" +
+      "<details><summary>" + name + " · " + count + "</summary>" + detail(v) + "</details>" +
+      '<p class="stay"><span class="yrs">' + v.start + "–" + v.end + "</span></p>" + marks + paused + "</article>";
+  }
+
+  /* ----- Tiles, grouped by area from west to east ----- */
+  function reactions(loc) {
+    const mine = REACTIONS.filter(r => r.location_id === loc.location_id);
+    if (!mine.length) return "";
+    return '<div class="react"><p class="q">How hard would it be to leave?</p>' + mine.map(r =>
+      "<p><strong>" + esc(r.person) + "</strong>: " + esc(String(r.ties || "").split(";").map(s => s.trim()).filter(Boolean).join(", ")) +
+      (blank(r.sentence) ? "" : (blank(r.ties) ? "" : ". ") + "“" + esc(r.sentence) + "”") + "</p>").join("") + "</div>";
+  }
+
+  const areaMap = {};
+  LOCATIONS.forEach(loc => {
+    const here = progs.filter(v => v.loc === loc);
+    if (!here.length) return;
+    const key = blank(loc.area) ? loc.city : loc.area;
+    (areaMap[key] = areaMap[key] || { name: key, id: "area-" + slug(key), locs: [] }).locs.push({ loc, here });
+  });
+  const areas = Object.values(areaMap).map(a => {
+    a.lon = a.locs.reduce((s, l) => s + Number(l.loc.lon), 0) / a.locs.length;
+    a.lat = a.locs.reduce((s, l) => s + Number(l.loc.lat), 0) / a.locs.length;
+    a.locs.sort((x, y) => x.loc.lon - y.loc.lon);
+    return a;
+  }).sort((a, b) => a.lon - b.lon);
+
+  document.getElementById("areas").innerHTML = areas.map(a =>
+    '<section class="area" id="' + a.id + '"><h2>' + esc(a.name) + '</h2><div class="tiles">' +
+    a.locs.map(l => '<section class="tile' + (l.loc.status === "set aside" ? " aside" : "") + '"><h3>' +
+      esc(l.loc.city) + ", " + esc(l.loc.region) + "</h3>" +
+      l.here.sort((x, y) => x.school.school.localeCompare(y.school.school)).map(label).join("") + reactions(l.loc) + "</section>").join("") +
+    "</div></section>").join("");
+
+  /* ----- Outline locator ----- */
+  (function locator() {
+    const W = 590, H = 275, px = lon => (Number(lon) + 128) * 7.77, py = lat => (52 - Number(lat)) * 10;
+    const land = [[-128,52],[-127.8,51],[-125,48.4],[-124.1,46.3],[-124.1,43],[-124.4,40.4],[-123,38],[-122.4,37.2],[-121.9,36.6],
+      [-120.6,34.6],[-118.5,34],[-117.1,32.5],[-115.9,30.4],[-114.3,28.2],[-112.2,24.5],[-110.9,24.5],[-112.8,28.4],[-114.5,30],
+      [-114.7,31.6],[-113.1,31],[-111,28],[-108,24.5],[-97.6,24.5],[-97.2,27.5],[-95,29.2],[-93.8,29.7],[-91.5,29.3],[-89.4,29.1],
+      [-89,30.3],[-87.5,30.3],[-85.5,29.8],[-84,30],[-82.8,28.5],[-82,26.5],[-81.2,25.2],[-80.3,25.3],[-80,26.8],[-80.6,28.5],
+      [-81.4,30.5],[-80.9,32],[-79,33.5],[-77.9,34],[-76.5,34.7],[-75.6,35.3],[-76,36.9],[-75.2,38],[-74.9,38.9],[-74,40.4],
+      [-72,41],[-71.5,41.4],[-70,41.7],[-70.2,42],[-70.8,42.5],[-70.2,43.6],[-68.8,44.3],[-67,44.8],[-66,45.2],[-65.8,43.6],
+      [-63.5,44.5],[-61,45.3],[-60,46],[-60.6,46.9],[-63,46],[-64.6,47.2],[-64.3,48.9],[-66.8,49.1],[-66.5,50.2],[-60,50.3],
+      [-57,51.5],[-56,52]];
+    const border = [[-123.2,49],[-95.2,49],[-94.6,48.7],[-89.5,48],[-84.8,46.6],[-83.5,45.8],[-82.5,45.3],[-82.4,43],[-83.1,42.2],
+      [-82.5,41.9],[-79,42.8],[-79.1,43.3],[-76.4,44.1],[-74.7,45],[-71.5,45],[-70.3,46],[-69.2,47.4],[-67.8,47.1],[-67.8,45.7],[-67,44.8]];
+    const path = pts => pts.map((p, i) => (i ? "L" : "M") + px(p[0]).toFixed(1) + " " + py(p[1]).toFixed(1)).join("");
+
+    const boxes = [], out = [];
+    const hit = b => b.x < 0 || b.x + b.w > W || b.y < 0 || b.y + b.h > H ||
+      boxes.some(o => b.x < o.x + o.w + 3 && o.x < b.x + b.w + 3 && b.y < o.y + o.h + 2 && o.y < b.y + b.h + 2);
+    const put = (a, tx, ty, anchor, lx, ly, box) => {
+      boxes.push(box);
+      out.push('<path class="lead" d="M' + a.x.toFixed(1) + " " + a.y.toFixed(1) + "L" + lx.toFixed(1) + " " + ly.toFixed(1) + '"/>' +
+        '<a href="#' + a.id + '"><text x="' + tx.toFixed(1) + '" y="' + ty.toFixed(1) + '" text-anchor="' + anchor +
+        '" dominant-baseline="middle">' + esc(a.name) + "</text></a>");
+    };
+    const pts = areas.map(a => ({ id: a.id, name: a.name, lon: a.lon, lat: a.lat, x: px(a.lon), y: py(a.lat), w: a.name.length * 6.3 }));
+
+    /* East-coast areas sit too close together, so their names stack in the Atlantic with a line back to the place. */
+    const east = pts.filter(a => a.lon > -77).sort((a, b) => b.lat - a.lat || a.lon - b.lon);
+    if (east.length) {
+      const half = (east.length - 1) * 7.5;
+      const colX = px(-68.5), mid = Math.min(H - 20 - half, Math.max(20 + half, east.reduce((s, a) => s + a.y, 0) / east.length));
+      east.forEach((a, i) => {
+        const ty = mid + (i - (east.length - 1) / 2) * 15;
+        put(a, colX, ty, "start", colX - 4, ty, { x: colX, y: ty - 7, w: a.w, h: 14 });
+      });
+    }
+    pts.filter(a => a.lon <= -77).forEach(a => {
+      const tries = [
+        { tx: a.x + 8, ty: a.y, an: "start", lx: a.x + 5, ly: a.y, x: a.x + 8 },
+        { tx: a.x - 8, ty: a.y, an: "end", lx: a.x - 5, ly: a.y, x: a.x - 8 - a.w },
+        { tx: a.x, ty: a.y - 14, an: "middle", lx: a.x, ly: a.y - 6, x: a.x - a.w / 2 },
+        { tx: a.x, ty: a.y + 14, an: "middle", lx: a.x, ly: a.y + 6, x: a.x - a.w / 2 }
+      ];
+      const t = tries.find(c => !hit({ x: c.x, y: c.ty - 7, w: a.w, h: 14 })) || tries[0];
+      put(a, t.tx, t.ty, t.an, t.lx, t.ly, { x: t.x, y: t.ty - 7, w: a.w, h: 14 });
+    });
+
+    document.getElementById("locator").innerHTML =
+      '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Outline of the United States and southern Canada with each area named where it sits">' +
+      '<path class="land" d="' + path(land) + 'Z"/><path class="border" d="' + path(border) + '"/>' + out.join("") + "</svg>";
+  })();
+
+  /* ----- Header counts and the list of what is blank or unchecked ----- */
+  const usedLocs = new Set(progs.map(v => v.loc.location_id));
+  document.getElementById("counts").textContent =
+    plural(ADVISORS.length, "advisor") + " · " + plural(progs.length, "program") + " · " + plural(usedLocs.size, "place");
+
+  const todo = [];
+  const names = list => list.map(v => v.school.school).join("; ");
+  const all = (list, word) => list.length === progs.length ? word : names(list);
+  const noStipend = progs.filter(v => blank(v.p.stipend));
+  if (noStipend.length) todo.push("Stipend amount for " + all(noStipend, "every program") + ".");
+  const noHealth = progs.filter(v => !v.hasHealth || v.school.spouse_coverage === "to confirm");
+  if (noHealth.length) todo.push("Spouse healthcare coverage for " + all(noHealth, "every school") + ".");
+  const unverified = progs.filter(v => (v.hasFunding && blank(v.p.funding_verified)) || (v.hasHealth && blank(v.school.health_verified)));
+  if (unverified.length) todo.push("A check of the funding and healthcare figures for " + all(unverified, "every program") +
+    ". Open each source, then type the date into the “verified” column.");
+  const unconfirmed = ADVISORS.filter(a => blank(a.status) || a.status === "unconfirmed");
+  if (unconfirmed.length) todo.push("Whether " + (unconfirmed.length === ADVISORS.length ? "each advisor" : plural(unconfirmed.length, "advisor")) + " is taking students, and for which cycle.");
+  const noProgram = progs.filter(v => blank(v.p.program));
+  if (noProgram.length) todo.push("Program name for " + names(noProgram) + ".");
+  const noLink = ADVISORS.filter(a => blank(a.link));
+  if (noLink.length) todo.push("Page link for " + noLink.map(a => a.advisor).join("; ") + ".");
+  const noLength = progs.filter(v => blank(v.p.expected_years));
+  if (noLength.length) todo.push("Expected length of " + all(noLength, "every program") + ". Until then each stay is shown as " + DEFAULT_YEARS + " years.");
+  const noNearby = LOCATIONS.filter(l => usedLocs.has(l.location_id) && blank(l.nearby_institutions));
+  if (noNearby.length) todo.push("Other institutions near " + noNearby.map(l => l.city).join("; ") + ".");
+  const noCountry = [...new Set(progs.map(v => v.loc.country))].filter(c => !CTRY[c]);
+  if (noCountry.length) todo.push("Country notes for " + noCountry.join(" and ") + ".");
+  if (!REACTIONS.length) todo.push("Your ties and one sentence each, for any place, in answer to “How hard would it be to leave?”");
+
+  document.getElementById("to-enter-list").innerHTML = todo.map(t => "<li>" + esc(t) + "</li>").join("");
+  document.getElementById("to-enter").hidden = !todo.length;
+
+  const note = document.getElementById("pending-note");
+  if (!anyFigures) note.innerHTML = 'Funding and healthcare are not entered yet. <a href="#to-enter">See what is still to enter.</a>';
+  else if (!anyVerified) note.innerHTML = 'Funding and healthcare lines are as found on public pages and have not been checked by hand yet. Open a program for the figures and their sources. <a href="#to-enter">See what is still to check.</a>';
+  note.hidden = anyFigures && anyVerified;
+}
+
+loadData().then(({ data, source }) => {
+  render(data);
+  document.getElementById("source-note").textContent = "Showing " + source + ".";
+}).catch(() => {
+  document.getElementById("areas").innerHTML = '<p class="quiet">The list could not be loaded. If you opened this file directly from your computer, open it through its web address instead.</p>';
+});
+</script>
+</body>
+</html>
